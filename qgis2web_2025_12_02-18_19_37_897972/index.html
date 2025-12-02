@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+
+        <!-- Tailwind CSS CDN for modern styling -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            // Configure Tailwind to use the Inter font
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif'],
+                        },
+                    },
+                },
+            };
+        </script>
+
+        <!-- Original External Resource Links (kept for functionality) -->
+        <link rel="stylesheet" href="./resources/ol.css">
+        <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+        <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+        <link rel="stylesheet" href="./resources/qgis2web.css">
+        
+        <style>
+        /* Base styles adapted for Navbar */
+        html, body {
+            font-family: 'Inter', sans-serif;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            background-color: #ffffff;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        
+        /* --- KONFIGURASI TATA LETAK UTAMA (SIDEBAR & PETA) --- */
+        /* Kontainer utama yang mengisi sisa layar di bawah navbar (4rem) */
+        .main-content {
+            position: absolute;
+            top: 4rem; /* Dimulai tepat di bawah navbar fixed (h-16) */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            overflow: hidden; 
+        }
+
+        /* --- SIDEBAR KONTROL LAYER --- */
+        #sidebar {
+            width: 300px; /* Lebar Sidebar */
+            height: 100%; /* Mengisi tinggi main-content */
+            background: #ffffff; /* Ganti dari gelap ke putih */
+            color: #1f2937; /* Ganti dari putih ke gelap */
+            padding: 1rem;
+            overflow-y: auto; 
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2); /* Bayangan lebih ringan */
+            z-index: 50; 
+            flex-shrink: 0; 
+            /* Transisi digunakan untuk animasi geser di mobile/tablet */
+            transition: transform 0.3s ease; 
+        }
+
+        /* Mobile/Tablet View (max-width: 768px) */
+        @media (max-width: 768px) {
+            #sidebar {
+                position: absolute; 
+                left: 0;
+                top: 0;
+                transform: translateX(-300px); /* Sembunyikan secara default */
+                z-index: 60; /* Z-index tertinggi agar overlay di atas peta */
+            }
+            /* Jika kelas sidebar-open ada pada main-content, tampilkan sidebar */
+            .main-content.sidebar-open #sidebar {
+                transform: translateX(0); /* Tampilkan */
+            }
+        }
+        
+        /* Desktop View (min-width: 769px) */
+        @media (min-width: 769px) {
+            #sidebar {
+                position: relative; /* Sidebar mengambil ruang di tata letak flex */
+                transform: translateX(0); /* Selalu terlihat */
+            }
+        }
+
+        /* Overlay untuk mobile saat sidebar terbuka */
+        .sidebar-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 55;
+            cursor: pointer;
+        }
+        .main-content.sidebar-open .sidebar-overlay {
+            display: block;
+        }
+
+        /* --- AREA PETA --- */
+        #map {
+            flex-grow: 1; /* Peta mengisi semua sisa ruang horizontal */
+            height: 100%; /* Mengisi tinggi main-content */
+            padding: 0;
+            margin: 0;
+        }
+        
+        /* --- PENGATURAN ULANG LAYER SWITCHER (MEMASUKKAN KE SIDEBAR) --- */
+        /* Semua gaya ini mengadaptasi .ol-layerswitcher agar pas di sidebar */
+        .ol-layerswitcher {
+            position: relative !important;
+            top: auto !important;
+            right: auto !important;
+            left: auto !important;
+            margin-top: 0.5rem; /* Mengurangi margin atas */
+            width: 100%; 
+            background: none !important; 
+            color: #1f2937 !important; /* Ganti dari putih ke gelap */
+            border-radius: 0;
+            box-shadow: none !important;
+            padding: 0;
+        }
+        
+        /* Sembunyikan tombol buka/tutup Layer Switcher bawaan */
+        .ol-layerswitcher button {
+            display: none !important;
+        }
+        
+        /* Tampilkan konten daftar layer secara default di sidebar */
+        .ol-layerswitcher ul {
+            display: block !important;
+            background: #fce7f3; /* Pink-100 equivalent (Pale Pink) */
+            border-radius: 6px;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .ol-layerswitcher label {
+            padding: 10px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #fbcfe8; /* Pink-300 equivalent */
+            transition: background-color 0.1s ease;
+            user-select: none; /* Mencegah seleksi teks */
+        }
+        
+        .ol-layerswitcher label:hover {
+            background-color: #fbcfe8; /* Pink-300 equivalent */
+        }
+        
+        /* Hapus border bawah pada item terakhir dalam daftar layer */
+        .ol-layerswitcher ul li:last-child label {
+            border-bottom: none;
+        }
+
+
+        /* Existing QGIS2Web Control Styles (dipertahankan) */
+        .ol-control > * {
+            background-color: #f8f8f8!important;
+            color: #444444!important;
+            border-radius: 0.5rem; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        .ol-attribution a, .gcd-gl-input::placeholder, .search-layer-input-search::placeholder {
+            color: #444444!important;
+        }
+        .search-layer-input-search {
+            background-color: #f8f8f8!important;
+        }
+        .ol-control > *:focus, .ol-control >*:hover {
+            background-color: rgba(248, 248, 248, 0.7)!important;
+        } 
+        .ol-control {
+            background-color: rgba(255,255,255,.4) !important;
+            padding: 0.5rem !important;
+            border-radius: 0.5rem;
+        } 
+        
+        /* --- Gaya Kustom untuk Simbol Legenda --- */
+        
+        /* 1. Rumah Sakit: Bulat Putih, Tanda + Merah */
+        .symbol-rs {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff; /* Bulat putih */
+            border-radius: 50%;
+            border: 1px solid #dc2626; /* Border merah */
+            color: #dc2626; /* Tanda plus merah */
+            font-weight: bold;
+            font-size: 14px;
+            line-height: 1;
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+            margin-right: 0.5rem;
+        }
+        
+        /* 2. Puskesmas: Bulat Hijau, Tanda + Biru */
+        .symbol-puskesmas {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #34d399; /* Hijau muda */
+            border-radius: 50%;
+            border: 1px solid #059669; /* Border hijau solid */
+            color: #2563eb; /* Tanda plus biru */
+            font-weight: bold;
+            font-size: 14px;
+            line-height: 1;
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+            margin-right: 0.5rem;
+        }
+        </style>
+
+        <title>Praktikum SIG Map</title>
+    </head>
+    <body>
+
+        <!-- START: Responsive Navigation Bar (h-16 = 4rem) -->
+        <nav class="fixed top-0 left-0 right-0 z-50 bg-pink-300 shadow-xl h-16 flex items-center px-4 md:px-8">
+            <div class="container mx-auto flex justify-start items-center w-full">
+                
+                <!-- 1. Praktikum SIG (Kiri, Bold) -->
+                <div class="flex items-center">
+                    <!-- Toggle Button for Mobile/Tablet -->
+                    <button 
+                        id="sidebar-toggle-btn"
+                        onclick="toggleSidebar()"
+                        class="p-2 text-pink-800 hover:text-pink-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors md:hidden">
+                        <!-- Icon Hamburger/Menu -->
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <!-- Main Title (Warna teks diubah ke Pink-900) -->
+                    <h1 class="text-pink-900 text-xl md:text-2xl font-extrabold tracking-wider ml-2 md:ml-0">
+                        Praktikum SIG
+                    </h1>
+                </div>
+
+                <!-- Judul peta di tengah dihilangkan sesuai permintaan -->
+
+                <!-- Placeholder untuk menjaga tata letak di kanan -->
+                <div class="ml-auto w-6 md:w-auto"></div>
+            </div>
+        </nav>
+        <!-- END: Responsive Navigation Bar -->
+
+        <!-- START: MAIN CONTENT CONTAINER (Sidebar + Map) -->
+        <div id="main-container" class="main-content">
+            
+            <!-- 1. SIDEBAR UNTUK INFORMASI -->
+            <div id="sidebar">
+                <h2 class="text-2xl font-bold mb-4 border-b border-pink-300 pb-2 flex justify-between items-center text-pink-900">
+                    INFORMASI
+                    <!-- Tombol tutup untuk mobile -->
+                    <button 
+                        onclick="toggleSidebar()"
+                        class="text-pink-600 hover:text-pink-400 transition-colors p-1 rounded-full md:hidden">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </h2>
+                
+                <!-- START: Bagian Informasi Proyek dan Kelompok -->
+                <div class="mt-0 p-4 bg-pink-100 rounded-lg shadow-md mb-6">
+                    <h3 class="text-xl font-bold text-pink-600 mb-3 border-b border-pink-300 pb-2">
+                        Proyek & Tim
+                    </h3>
+                    
+                    <!-- 1. Judul Peta -->
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-600">Judul Peta:</p>
+                        <p class="text-lg font-extrabold text-pink-900">Analisis Spasial Sebaran Penyakit Terbanyak untuk Perencanaan Pembangunan Faskes di Tebingtinggi</p>
+                    </div>
+
+                    <!-- 2. Logo USU -->
+                    <a href="https://www.google.com/maps/search/?api=1&query=Universitas+Sumatera+Utara" target="_blank" class="block">
+                        <div class="flex items-center space-x-3 mb-4 p-2 bg-pink-200 rounded-md hover:bg-pink-300 transition-colors cursor-pointer">
+                            <img 
+                                src="https://placehold.co/40x40/ec4899/ffffff?text=USU" 
+                                alt="Logo USU Placeholder" 
+                                class="rounded-full h-10 w-10 border-2 border-pink-500"
+                                onerror="this.onerror=null; this.src='https://placehold.co/40x40/4B5563/ffffff?text=USU'">
+                            <p class="text-base font-medium text-pink-800">
+                                Universitas Sumatera Utara (USU)
+                            </p>
+                        </div>
+                    </a>
+
+                    <!-- 3 & 4. Kelompok dan Anggota -->
+                    <div class="mb-2">
+                        <p class="text-base font-semibold text-gray-700 mb-2">Kelompok: <span class="text-pink-600 text-xl font-extrabold">4</span></p>
+                        <p class="text-sm font-semibold text-gray-600 mb-1">Nama Anggota:</p>
+                        <ul class="list-disc list-inside space-y-1 ml-4 text-sm text-gray-700">
+                            <li>Lovia Fedora Sinaga | 070</li>
+                            <li>Roma Sari Sihite | 075</li>
+                            <li>Anisa Katrin Pakpahan | 080</li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- END: Bagian Informasi Proyek dan Kelompok -->
+
+                <!-- START: Bagian Legenda Peta (Diperbarui) -->
+                <div class="p-4 bg-pink-100 rounded-lg shadow-md mb-6">
+                    <h3 class="text-xl font-bold text-pink-600 mb-3 border-b border-pink-300 pb-2">
+                        Legenda
+                    </h3>
+                    
+                    <ul class="space-y-2 text-gray-700">
+                        <li class="flex items-center">
+                            <span class="symbol-puskesmas">+</span>
+                            <span class="text-base font-medium">Puskesmas</span>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="symbol-rs">+</span>
+                            <span class="text-base font-medium">Rumah Sakit</span>
+                        </li>
+                        <li class="flex items-center">
+                            <!-- Zona Prioritas Pembangunan: Diubah ke Biru -->
+                            <span class="w-5 h-5 mr-2 inline-block rounded-full bg-blue-600 opacity-75 border-2 border-blue-800"></span>
+                            <span class="text-base font-medium">Zona Prioritas Pembangunan</span>
+                        </li>
+                        <li class="flex items-center">
+                            <!-- Simbol untuk Zona RS 2km (Kuning/Coklat) - Tetap -->
+                            <span class="w-5 h-5 mr-2 inline-block rounded-full bg-yellow-600 opacity-75 border-2 border-yellow-800"></span>
+                            <span class="text-base font-medium">Zona RS (2km)</span>
+                        </li>
+                        <li class="flex items-center">
+                            <!-- Simbol untuk Zona Puskesmas 500m (Hijau/Gelap) - Tetap -->
+                            <span class="w-5 h-5 mr-2 inline-block rounded-full bg-green-700 opacity-75 border-2 border-green-900"></span>
+                            <span class="text-base font-medium">Zona Puskesmas (500m)</span>
+                        </li>
+                    </ul>
+                    
+                    <!-- Layer Switcher langsung diletakkan di bawah legenda tanpa judul tambahan -->
+                    <div id="layer-switcher-target" class="mt-4 border-t border-pink-300 pt-3">
+                        <!-- Layer Switcher dari OpenLayers/qgis2web akan muncul di sini -->
+                    </div>
+                </div>
+                <!-- END: Bagian Legenda Peta -->
+                
+            </div>
+
+            <!-- 2. AREA PETA -->
+            <div id="map">
+                <!-- Overlay mobile untuk menutup sidebar saat diklik di luar -->
+                <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+                
+                <div id="popup" class="ol-popup">
+                    <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                    <div id="popup-content"></div>
+                </div>
+            </div>
+
+        </div>
+        <!-- END: MAIN CONTENT CONTAINER -->
+
+        <!-- Original Script Imports -->
+        <script src="resources/qgis2web_expressions.js"></script>
+        <script src="./resources/functions.js"></script>
+        <script src="./resources/ol.js"></script>
+        <script src="./resources/ol-layerswitcher.js"></script>
+        <script src="resources/photon-geocoder-autocomplete.min.js"></script>
+        
+        <!-- Layer and Style Imports -->
+        <script src="layers/zona_prioritas_pembngunan_1.js"></script><script src="layers/Zona_puskesmas_500m_2.js"></script><script src="layers/zona_RS_2km_UTM_3.js"></script><script src="layers/Merged_4.js"></script><script src="layers/SUNGAI_LN_50K_5.js"></script><script src="layers/JALAN_LN_50K_6.js"></script><script src="layers/Pusat_Kecamatan_Tebingtinggi_7.js"></script><script src="layers/PUSKESMAS_PT_50K_8.js"></script><script src="layers/RUMAHSAKIT_PT_50K_9.js"></script><script src="layers/RS_UTM47N_10.js"></script><script src="layers/puskesmas_UTM47N_11.js"></script>
+        <script src="styles/zona_prioritas_pembngunan_1_style.js"></script><script src="styles/Zona_puskesmas_500m_2_style.js"></script><script src="styles/zona_RS_2km_UTM_3_style.js"></script><script src="styles/Merged_4_style.js"></script><script src="styles/SUNGAI_LN_50K_5_style.js"></script><script src="styles/JALAN_LN_50K_6_style.js"></script><script src="styles/Pusat_Kecamatan_Tebingtinggi_7_style.js"></script><script src="styles/PUSKESMAS_PT_50K_8_style.js"></script><script src="styles/RUMAHSAKIT_PT_50K_9_style.js"></script><script src="styles/RS_UTM47N_10_style.js"></script><script src="styles/puskesmas_UTM47N_11_style.js"></script>
+        
+        <script src="./layers/layers.js" type="text/javascript"></script> 
+        <script src="./resources/Autolinker.min.js"></script>
+        
+        <!-- SCRIPT PENTING DARI QGIS2WEB (Harus dimuat setelah layers dan sebelum script custom) -->
+        <script src="./resources/qgis2web.js"></script> 
+        
+        <!-- START: SCRIPT BARU UNTUK TOGGLE SIDEBAR DAN MEMINDAHKAN LAYER SWITCHER -->
+        <script>
+            // Fungsi untuk mengaktifkan/menonaktifkan sidebar
+            function toggleSidebar() {
+                const mainContainer = document.getElementById('main-container');
+                
+                // Toggle kelas di container utama
+                mainContainer.classList.toggle('sidebar-open');
+                
+                // Pastikan peta diperbarui ukurannya setelah sidebar berubah (penting untuk OpenLayers)
+                if (window.map) {
+                    // Penundaan agar animasi transisi selesai sebelum update
+                    setTimeout(() => {
+                        window.map.updateSize(); 
+                    }, 300); 
+                }
+            }
+
+            // Fungsi untuk memindahkan Layer Switcher ke dalam sidebar dan mengatur status awal
+            function moveLayerSwitcherToSidebar() {
+                // Memberikan penundaan singkat untuk memastikan QGIS2Web.js selesai membuat semua kontrol.
+                // Ini adalah kunci agar Layer Switcher "konek" ke layer.
+                setTimeout(() => {
+                    var layerSwitcherTarget = document.getElementById('layer-switcher-target');
+                    // Cari elemen Layer Switcher yang dihasilkan oleh OpenLayers
+                    var layerSwitcher = document.querySelector('.ol-layerswitcher'); 
+                    var mainContainer = document.getElementById('main-container');
+                    
+                    // 1. Matikan semua layer selain Base Map (index 0) secara default
+                    // Kode ini harus dijalankan setelah layerList terdefinisi di qgis2web.js
+                    if (typeof layerList !== 'undefined' && Array.isArray(layerList)) {
+                        for (let i = 1; i < layerList.length; i++) {
+                            const layer = layerList[i];
+                            layer.setVisible(false);
+                        }
+                    }
+
+                    if (layerSwitcher && layerSwitcherTarget) {
+                        // 2. Pindahkan elemen layer switcher ke dalam div target legenda
+                        layerSwitcherTarget.appendChild(layerSwitcher);
+                        
+                        // 3. Pastikan daftar layer (UL) terbuka secara default
+                        var ul = layerSwitcher.querySelector('ul');
+                        if(ul) {
+                            ul.style.display = 'block';
+                        }
+
+                        // 4. Atur status awal sidebar: Buka di desktop, Tutup di mobile (<769px)
+                        if (window.innerWidth > 768) {
+                            mainContainer.classList.add('sidebar-open'); // Buka di desktop
+                        } else {
+                            mainContainer.classList.remove('sidebar-open'); // Tutup di mobile
+                        }
+                        
+                        // 5. Panggil updateSize untuk OpenLayers
+                        if (window.map) {
+                            setTimeout(() => {
+                                map.updateSize();
+                            }, 100);
+                        }
+                    }
+                }, 500); // Penundaan 500ms
+            }
+
+            // Jalankan fungsi setelah semua resource dimuat
+            window.addEventListener('load', moveLayerSwitcherToSidebar);
+            
+            // Tambahkan listener untuk resize, agar peta menyesuaikan saat orientasi/ukuran berubah
+            window.addEventListener('resize', () => {
+                if (window.map) {
+                    window.map.updateSize();
+                }
+            });
+        </script>
+        <!-- END: SCRIPT BARU -->
+        
+    </body>
+</html>
